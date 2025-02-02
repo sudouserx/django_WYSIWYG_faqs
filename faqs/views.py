@@ -1,24 +1,96 @@
+from django.core.cache import cache
 from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
 from rest_framework import viewsets
+from rest_framework.response import Response
 
 from .models import FAQ
 from .serializers import FAQSerializer
+
+CACHE_TIMEOUT = 60 * 15  # 15 minutes
+CACHE_VERSION_KEY = "faq_cache_version"
+
+
+def get_cache_version():
+    """
+    Retrieve the current FAQ cache version.
+    If it doesn't exist, initialize it to 1.
+    """
+    version = cache.get(CACHE_VERSION_KEY)
+    if version is None:
+        version = 1
+        cache.set(CACHE_VERSION_KEY, version)
+    return version
+
+
+def increment_cache_version():
+    """
+    Increment the FAQ cache version.
+    """
+    version = get_cache_version() + 1
+    cache.set(CACHE_VERSION_KEY, version)
+    return version
 
 
 class FAQViewSet(viewsets.ModelViewSet):
     queryset = FAQ.objects.all()
     serializer_class = FAQSerializer
 
-    @method_decorator(cache_page(60 * 15))
-    def list(self, request, *args, **kwargs):
-        return super().list(request, *args, **kwargs)
-
-    @method_decorator(cache_page(60 * 15))
-    def retrieve(self, request, *args, **kwargs):
-        return super().retrieve(request, *args, **kwargs)
-
-    def get_cache_key(self, request):
-        # Include language in cache key
+    def get_list_cache_key(self, request):
+        """
+        Build a cache key for the FAQ list. It includes the language (if any)
+        and the current cache version.
+        """
         lang = request.query_params.get("lang", "en")
-        return f"faqs_{lang}_{request.path}"
+        version = get_cache_version()
+        return f"faqs_list_{lang}_v{version}"
+
+    def get_detail_cache_key(self, request, pk):
+        """
+        Build a cache key for a FAQ detail view.
+        """
+        lang = request.query_params.get("lang", "en")
+        version = get_cache_version()
+        return f"faq_detail_{pk}_{lang}_v{version}"
+
+    def list(self, request, *args, **kwargs):
+        cache_key = self.get_list_cache_key(request)
+        data = cache.get(cache_key)
+        if data is not None:
+            return Response(data)
+
+        # No cached data, so call the parent implementation.
+        response = super().list(request, *args, **kwargs)
+        # Cache the response data.
+        cache.set(cache_key, response.data, CACHE_TIMEOUT)
+        return response
+
+    def retrieve(self, request, *args, **kwargs):
+        pk = kwargs.get("pk")
+        cache_key = self.get_detail_cache_key(request, pk)
+        data = cache.get(cache_key)
+        if data is not None:
+            return Response(data)
+
+        response = super().retrieve(request, *args, **kwargs)
+        cache.set(cache_key, response.data, CACHE_TIMEOUT)
+        return response
+
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        increment_cache_version()  # Invalidate list/detail caches by bumping the version
+        return response
+
+    def update(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        increment_cache_version()  # Invalidate caches
+        return response
+
+    def partial_update(self, request, *args, **kwargs):
+        response = super().partial_update(request, *args, **kwargs)
+        increment_cache_version()  # Invalidate caches
+        return response
+
+    def destroy(self, request, *args, **kwargs):
+        response = super().destroy(request, *args, **kwargs)
+        increment_cache_version()  # Invalidate caches
+        return response
