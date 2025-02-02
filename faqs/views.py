@@ -26,51 +26,40 @@ def increment_cache_version():
     """
     Increment the FAQ cache version.
     """
-    version = get_cache_version() + 1
-    cache.set(CACHE_VERSION_KEY, version)
-    return version
+    version = get_cache_version()
+    cache.set(CACHE_VERSION_KEY, version + 1)
+    return version + 1
 
 
 class FAQViewSet(viewsets.ModelViewSet):
     queryset = FAQ.objects.all()
     serializer_class = FAQSerializer
 
-    def get_list_cache_key(self, request):
-        """
-        Build a cache key for the FAQ list. It includes the language (if any)
-        and the current cache version.
-        """
-        lang = request.query_params.get("lang", "en")
+    def get_list_cache_key(self, lang="en"):
         version = get_cache_version()
         return f"faqs_list_{lang}_v{version}"
 
-    def get_detail_cache_key(self, request, pk):
-        """
-        Build a cache key for a FAQ detail view.
-        """
-        lang = request.query_params.get("lang", "en")
+    def get_detail_cache_key(self, pk, lang="en"):
         version = get_cache_version()
         return f"faq_detail_{pk}_{lang}_v{version}"
 
     def list(self, request, *args, **kwargs):
-        cache_key = self.get_list_cache_key(request)
+        lang = request.query_params.get("lang", "en")
+        cache_key = self.get_list_cache_key(lang)
         data = cache.get(cache_key)
         if data is not None:
             return Response(data)
-
-        # No cached data, so call the parent implementation.
         response = super().list(request, *args, **kwargs)
-        # Cache the response data.
         cache.set(cache_key, response.data, CACHE_TIMEOUT)
         return response
 
     def retrieve(self, request, *args, **kwargs):
         pk = kwargs.get("pk")
-        cache_key = self.get_detail_cache_key(request, pk)
+        lang = request.query_params.get("lang", "en")
+        cache_key = self.get_detail_cache_key(pk, lang)
         data = cache.get(cache_key)
         if data is not None:
             return Response(data)
-
         response = super().retrieve(request, *args, **kwargs)
         cache.set(cache_key, response.data, CACHE_TIMEOUT)
         return response
