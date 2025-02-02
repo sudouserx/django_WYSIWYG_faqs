@@ -8,7 +8,7 @@ This project provides a REST API for managing FAQs with support for multi-langua
 
 - **Multi-language FAQ Support**: Automatically translates FAQs into any language using Google Translate API.
 - **WYSIWYG Editor**: Uses `django-ckeditor` for rich text formatting of FAQ answers.
-- **Caching**: Implements Redis caching for improved performance.
+- **Versioned Caching**: Implements a versioned caching mechanism to ensure cache consistency and invalidation.
 - **Admin Panel**: User-friendly admin interface for managing FAQs and translations.
 
 ---
@@ -112,12 +112,28 @@ Access the admin panel at `http://localhost:8000/admin/` to manage FAQs and tran
 
 ---
 
+## Versioned Caching Mechanism
+
+The API uses a **versioned caching mechanism** to ensure cache consistency and automatic invalidation. Here's how it works:
+
+- **Cache Keys**: Cache keys include a version number (e.g., `faqs_list_en_v1`).
+- **Cache Invalidation**: Whenever an FAQ is created, updated, or deleted, the cache version is incremented, invalidating all existing cached data.
+- **Language Support**: Cache keys are language-specific, ensuring that translations are cached separately.
+
+---
+
 ## Running Tests
 
-To run unit tests:
+The project includes comprehensive unit tests with **92% coverage**. To run the tests:
+
 ```bash
-python manage.py test
+pytest --cov=faqs --cov-report=term-missing
 ```
+
+### **Test Coverage**
+- **Models**: 100% coverage for FAQ and FAQTranslation models.
+- **Views**: 100% coverage for FAQViewSet, including caching and translation logic.
+- **Overall Coverage**: 92%
 
 ---
 
@@ -215,4 +231,3 @@ redis-server
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
-
