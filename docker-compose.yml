@@ -16,6 +16,35 @@ services:
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       - redis
+      - celery
+
+  celery:
+    build: .
+    container_name: celery_worker
+    command: celery -A bharatfd worker --loglevel=info
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+      - web
+
+  celery-beat:
+    build: .
+    container_name: celery_beat
+    command: celery -A bharatfd beat --loglevel=info
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+      - web
 
   redis:
     image: redis:6.2-alpine
