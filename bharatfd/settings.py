@@ -137,3 +137,11 @@ CACHES = {
         },
     }
 }
+
+# settings.py
+POPULAR_INDIAN_LANGUAGES = ["hi", "bn", "te", "ta", "mr", "gu", "kn", "ml", "pa", "or"]
+
+# CELERY CONFIGURATION
+CELERY_BROKER_URL = "redis://127.0.0.1:6379/1"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
