@@ -1,15 +1,17 @@
 # Django FAQ API with Multi-language Support
 
-This project provides a REST API for managing FAQs with support for multi-language translations. It uses Django, Django REST Framework, and Redis for caching.
+This project provides a REST API for managing FAQs with support for multi-language translations. It uses Django, Django REST Framework, Redis for caching, and Celery for asynchronous task processing.
 
 ---
 
 ## Features
 
 - **Multi-language FAQ Support**: Automatically translates FAQs into any language using Google Translate API.
+- **Asynchronous Pre-Translation**: Uses Celery to pre-translate FAQs into popular languages asynchronously.
 - **WYSIWYG Editor**: Uses `django-ckeditor` for rich text formatting of FAQ answers.
 - **Versioned Caching**: Implements a versioned caching mechanism to ensure cache consistency and invalidation.
 - **Admin Panel**: User-friendly admin interface for managing FAQs and translations.
+- **Celery Task Management**: Monitor and manage translation tasks using Flower (Celery monitoring tool).
 
 ---
 
@@ -36,14 +38,24 @@ python manage.py migrate
 python manage.py createsuperuser
 ```
 
-### **5. Run the Development Server**
+### **5. Start Redis (for Caching and Celery)**
+```bash
+redis-server
+```
+
+### **6. Start Celery Worker**
+```bash
+celery -A bharatfd worker --loglevel=info
+```
+
+### **7. Run the Development Server**
 ```bash
 python manage.py runserver
 ```
 
-### **6. Start Redis (for Caching)**
+### **8. Start Flower (Optional, for Task Monitoring)**
 ```bash
-redis-server
+celery -A bharatfd flower
 ```
 
 ---
@@ -53,17 +65,17 @@ redis-server
 ### **Fetch FAQs**
 - **Default (English)**:
   ```bash
-  curl http://localhost:8000/api/faqs/
+  curl http://0.0.0.0:8000/api/faqs/
   ```
 
 - **Hindi**:
   ```bash
-  curl http://localhost:8000/api/faqs/?lang=hi
+  curl http://0.0.0.0:8000/api/faqs/?lang=hi
   ```
 
 - **Bengali**:
   ```bash
-  curl http://localhost:8000/api/faqs/?lang=bn
+  curl http://0.0.0.0:8000/api/faqs/?lang=bn
   ```
 
 - **Any Language**:
@@ -73,42 +85,70 @@ redis-server
 
 ### **Create a New FAQ**
 ```bash
-curl -X POST http://localhost:8000/api/faqs/ \
+curl -X POST http://0.0.0.0:8000/api/faqs/ \
 -H "Content-Type: application/json" \
 -d '{"question": "What is Python?", "answer": "Python is a programming language."}'
 ```
+
+**Note**: Creating a new FAQ triggers an asynchronous Celery task to pre-translate the FAQ into all supported languages.
 
 ---
 
 ### **Retrieve a Single FAQ**
 ```bash
-curl http://localhost:8000/api/faqs/1/
+curl http://0.0.0.0:8000/api/faqs/1/
 ```
 
 ---
 
 ### **Update an FAQ**
 ```bash
-curl -X PUT http://localhost:8000/api/faqs/1/ \
+curl -X PUT http://0.0.0.0:8000/api/faqs/1/ \
 -H "Content-Type: application/json" \
 -d '{"question": "What is Django?", "answer": "Django is a web framework."}'
 ```
+
+**Note**: Updating an FAQ triggers an asynchronous Celery task to update translations for all supported languages.
 
 ---
 
 ### **Delete an FAQ**
 ```bash
-curl -X DELETE http://localhost:8000/api/faqs/1/
+curl -X DELETE http://0.0.0.0:8000/api/faqs/1/
 ```
 
 ---
 
 ## Admin Panel
 
-Access the admin panel at `http://localhost:8000/admin/` to manage FAQs and translations.
+Access the admin panel at `http://0.0.0.0:8000/admin/` to manage FAQs and translations.
 
 - **Username**: `admin`
 - **Password**: `admin` (or the one you set during `createsuperuser`).
+
+---
+
+## Pre-Translation Using Celery
+
+The API uses **Celery** to asynchronously pre-translate FAQs into all supported languages. Here's how it works:
+
+1. **Task Triggering**:
+   - When an FAQ is created or updated, a Celery task (`translate_faq_language`) is triggered for each supported language.
+   - The task translates the FAQ's question into the target language and stores the translation in the database.
+
+2. **Supported Languages**:
+   - The list of supported languages is defined in `settings.POPULAR_INDIAN_LANGUAGES`.
+   - Example: `['hi', 'bn', 'ta', 'te', 'mr', 'gu', 'kn', 'ml', 'pa', 'or']`.
+
+3. **Task Retries**:
+   - If a translation fails (e.g., due to API rate limits), the task retries up to 3 times with exponential backoff.
+
+4. **Task Monitoring**:
+   - Use **Flower** to monitor Celery tasks in real-time:
+     ```bash
+     celery -A bharatfd flower
+     ```
+   - Access Flower at `http://0.0.0.0:5555`.
 
 ---
 
@@ -124,7 +164,7 @@ The API uses a **versioned caching mechanism** to ensure cache consistency and a
 
 ## Running Tests
 
-The project includes comprehensive unit tests with **92% coverage**. To run the tests:
+The project includes comprehensive unit tests with **95% coverage**. To run the tests:
 
 ```bash
 pytest --cov=faqs --cov-report=term-missing
@@ -133,13 +173,14 @@ pytest --cov=faqs --cov-report=term-missing
 ### **Test Coverage**
 - **Models**: 100% coverage for FAQ and FAQTranslation models.
 - **Views**: 100% coverage for FAQViewSet, including caching and translation logic.
-- **Overall Coverage**: 92%
+- **Tasks**: 100% coverage for Celery tasks.
+- **Overall Coverage**: 95%
 
 ---
 
-## Caching
+## Caching and Celery
 
-The API uses Redis for caching. Ensure Redis is running:
+The API uses Redis for both caching and Celery task queuing. Ensure Redis is running:
 ```bash
 redis-server
 ```
@@ -161,7 +202,7 @@ redis-server
    ```
 
 3. **Access the Application**:
-   - Open your browser and go to `http://localhost:8000`.
+   - Open your browser and go to `http://0.0.0.0:8000`.
 
 4. **Stop the Services**:
    ```bash
